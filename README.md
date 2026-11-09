@@ -4,21 +4,22 @@ QR 접속, 역할별 공구 대시보드, 촬영·확인·출납 저장을 위�
 
 ## 실행 파일
 
-**`SmartToolBox_실행.py`를 실행하세요.**
+**`SmartToolBox_실행.py`를 실행하세요.** 기본 실행은 휴대폰·QR·관리자와 같은
+고정 주소 `https://sanghyeopkim.pythonanywhere.com/`를 엽니다.
 
 ```sh
 conda activate safety
 python SmartToolBox_실행.py
 ```
 
-서버가 시작된 뒤 기본 브라우저가 자동으로 열립니다. 기본 주소는 http://127.0.0.1:8001/ 이며 포트가 사용 중이면 다음 빈 포트를 선택하고 실제 주소를 터미널에 표시합니다. 종료는 Control+C입니다.
-이 Mac에서는 다른 Python으로 실행해도 `/opt/anaconda3/envs/safety/bin/python`이 있으면 자동으로 전환합니다. 다른 컴퓨터에서는 먼저 필요한 환경과 패키지를 설치하세요.
+로컬 개발 서버가 필요한 경우에만 아래처럼 실행합니다.
 
 ```sh
-python -m pip install -r requirements.txt
+python SmartToolBox_실행.py --local
 ```
 
-`app.py`는 서버 코드입니다. 브라우저 자동 열기는 `SmartToolBox_실행.py`가 담당합니다.
+로컬 서버의 기본 주소는 http://127.0.0.1:8001/ 이며, 고정 주소와 데이터베이스가
+다릅니다. 실제 시연·휴대폰·QR·관리자 작업은 항상 고정 주소를 사용하세요.
 
 ## 계정
 
@@ -47,13 +48,9 @@ python -m pip install -r requirements.txt
 
 ## QR과 휴대폰 접속
 
-관리자 운영 화면의 QR은 웹 접속용이며 개별 공구를 식별하지 않습니다. 연결 주소는 환경변수로 설정합니다.
-
-```sh
-STBM_PUBLIC_URL=https://your-host.example/ python SmartToolBox_실행.py
-```
-
-기본 서버는 이 컴퓨터만 접속하도록 구성했습니다. URL만 바꾼다고 휴대폰 접속이 열리지는 않습니다. 실제 휴대폰 접속은 별도 HTTPS 배포 또는 승인된 터널 구성이 필요합니다. 배포·터널은 이번에 구성하지 않았습니다.
+관리자 운영 화면의 QR은 웹 접속용이며 개별 공구를 식별하지 않습니다. 기본 연결
+주소는 `https://sanghyeopkim.pythonanywhere.com/`입니다. PC 관리자와 휴대폰
+작업자가 같은 고정 주소를 사용하므로 같은 PythonAnywhere 데이터베이스에 저장됩니다.
 실시간 카메라는 HTTPS 또는 localhost에서 동작합니다.
 
 ## 데이터
