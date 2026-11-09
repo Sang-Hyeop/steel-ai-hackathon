@@ -77,6 +77,22 @@ theme(localStorage.getItem('stbm-theme')||(matchMedia('(prefers-color-scheme: da
 window.addEventListener('beforeunload',stopCamera);
 (async()=>{try{setUser(await api('me'));await load();render()}catch(e){if(user)notify(e.message)}})();
 
+function formatOverdueBanner(){
+ const banner=$('.overdue-banner');if(!banner||!state)return;
+ const message=banner.querySelector('p');if(message)message.textContent='반납 예정일이 지났습니다. 즉시 반납해 주세요.';
+ const overdue=state.overdue||[];
+ banner.querySelectorAll('.overdue-item').forEach((el,i)=>{
+  if(el.dataset.formatted)return;
+  const o=overdue[i];if(!o)return;
+  const who=o.name||user?.name||'작업자',where=o.plant||'공정 미지정';
+  el.innerHTML=`<b>${esc(who)} · ${esc(where)}</b><span>대여일 : ${dayLabel(o.rent_start)} ~ ${dayLabel(o.rent_due)} ${hourLabel(o.rent_due_hour)}</span><span>${Object.entries(o.items).map(([k,v])=>`${esc(k)} ${v}개`).join(' · ')} · ${o.days_overdue}일 연체</span>`;
+  el.dataset.formatted='true';
+ });
+}
+const overdueObserver=new MutationObserver(formatOverdueBanner);
+overdueObserver.observe($('#content'),{childList:true,subtree:true});
+formatOverdueBanner();
+
 // Fixed worksite context; clock follows Korea time, independent of device timezone.
 function updateSiteClock(){const now=new Date();$('#site-date').textContent=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'long',day:'numeric',weekday:'short'}).format(now);$('#site-time').textContent=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(now);$('#site-time').dateTime=now.toISOString()}
 function weatherLabel(code){if(code===0)return '맑음';if([1,2].includes(code))return '구름 조금';if(code===3)return '흐림';if([45,48].includes(code))return '안개';if([51,53,55,56,57].includes(code))return '이슬비';if([61,63,65,66,67,80,81,82].includes(code))return '비';if([71,73,75,77,85,86].includes(code))return '눈';if([95,96,99].includes(code))return '뇌우';return '날씨 정보'}
