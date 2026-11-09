@@ -21,8 +21,8 @@ class AppTest(unittest.TestCase):
   with sqlite3.connect(self.path) as c:self.assertTrue(all(r[0]!='1234' for r in c.execute('select password from users')))
  def test_lifecycle_and_persistence(self):
   self.assertEqual(self.post(self.admin,'stock',self.stock()).status_code,200)
-  self.post(self.admin,'stock',self.stock(tool='렌치'))
-  body=self.event(items={'드라이버':2,'렌치':1});r=self.post(self.worker,'events',body);self.assertEqual(r.status_code,201)
+  self.post(self.admin,'stock',self.stock(tool='몽키 스패너'))
+  body=self.event(items={'드라이버':2,'몽키 스패너':1});r=self.post(self.worker,'events',body);self.assertEqual(r.status_code,201)
   self.assertEqual(self.post(self.worker,'events',body).json['id'],r.json['id'])
   self.assertEqual(self.post(self.worker,'events',self.event(items={'드라이버':2})).status_code,400)
   self.assertEqual(self.post(self.worker,'events',self.event('return',{'드라이버':3})).status_code,400)
@@ -40,7 +40,7 @@ class AppTest(unittest.TestCase):
   b=self.event();self.post(self.worker,'events',b);b['items']={'ドライバー':2};self.assertEqual(self.post(self.worker,'events',b).status_code,400)
  def test_atomic_and_save_failure(self):
   self.post(self.admin,'stock',self.stock())
-  self.assertEqual(self.post(self.worker,'events',self.event(items={'드라이버':1,'렌치':1})).status_code,400)
+  self.assertEqual(self.post(self.worker,'events',self.event(items={'드라이버':1,'몽키 스패너':1})).status_code,400)
   with sqlite3.connect(self.path) as c:c.execute("CREATE TRIGGER fail_line BEFORE INSERT ON lines BEGIN SELECT RAISE(ABORT,'test storage failure'); END")
   self.assertEqual(self.post(self.worker,'events',self.event()).status_code,503)
   with sqlite3.connect(self.path) as c:self.assertEqual(c.execute('SELECT count(*) FROM events').fetchone()[0],0)
@@ -58,10 +58,10 @@ class IntegratedTest(unittest.TestCase):
  def tearDown(self):self.tmp.cleanup()
  def test_grouped_kpi_and_qr(self):
   h={'X-CSRF-Token':self.me['csrf']}
-  for t in ['드라이버','렌치']:
+  for t in ['드라이버','몽키 스패너']:
    self.assertEqual(self.c.post('/api/stock',json={'tool':t,'total':5,'version':0,'reason':'신규 구매 및 추가','token':str(uuid.uuid4())},headers=h).status_code,200)
   for kind in ['borrow','return']:
-   self.assertEqual(self.c.post('/api/events',json={'kind':kind,'items':{'드라이버':2,'렌치':1},'token':str(uuid.uuid4())},headers=h).status_code,201)
+   self.assertEqual(self.c.post('/api/events',json={'kind':kind,'items':{'드라이버':2,'몽키 스패너':1},'token':str(uuid.uuid4())},headers=h).status_code,201)
   d=self.c.get('/api/state').json;self.assertEqual(d['return_count'],1);self.assertEqual(len(d['groups']),2);self.assertEqual(len(d['groups'][0]['items']),2)
   self.assertEqual(d['groups'][0]['status'],'완료');self.assertEqual(self.c.get('/api/qr').mimetype,'image/svg+xml')
  def test_camera_unavailable_and_protected_routes(self):

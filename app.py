@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from flask import Flask, request, session, jsonify, render_template, redirect, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 
-TOOLS = ['드라이버', '렌치', '펜치', '망치']
+TOOLS = ['드라이버', '몽키 스패너', '펜치', '망치']
 REASONS = ['신규 구매 및 추가', '폐기', '재고 정정']
 
 def create_app(database=None):
@@ -48,6 +48,20 @@ def create_app(database=None):
                 c.execute('INSERT INTO users(name,password,role) VALUES(?,?,?)',(name,generate_password_hash('1234'),'admin' if name=='관리자' else 'worker'))
         for mode in ['test','demo','operation']:
             for tool in TOOLS: c.execute('INSERT OR IGNORE INTO stock(mode,tool,total) VALUES(?,?,0)',(mode,tool))
+        # Rename legacy display label 렌치 → 몽키 스패너 without losing stock/history.
+        for mode in ['test','demo','operation']:
+            old=c.execute("SELECT * FROM stock WHERE mode=? AND tool='렌치'",(mode,)).fetchone()
+            if not old: continue
+            cur=c.execute("SELECT * FROM stock WHERE mode=? AND tool='몽키 스패너'",(mode,)).fetchone()
+            if cur:
+                if cur['total']==0 and old['total']>0:
+                    c.execute('UPDATE stock SET total=?,version=? WHERE mode=? AND tool=?',(old['total'],old['version'],mode,'몽키 스패너'))
+                c.execute("DELETE FROM stock WHERE mode=? AND tool='렌치'",(mode,))
+            else:
+                c.execute("UPDATE stock SET tool='몽키 스패너' WHERE mode=? AND tool='렌치'",(mode,))
+        c.execute("UPDATE lines SET tool='몽키 스패너' WHERE tool='렌치'")
+        c.execute("UPDATE adjustments SET tool='몽키 스패너' WHERE tool='렌치'")
+        c.execute("UPDATE events SET payload=REPLACE(payload,'렌치','몽키 스패너') WHERE payload LIKE '%렌치%'")
     def now(): return datetime.now(ZoneInfo('Asia/Seoul')).isoformat(timespec='seconds')
     def auth(admin=False):
         def decorate(fn):
