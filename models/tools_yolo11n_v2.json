@@ -1,0 +1,19 @@
+{
+  "model": "YOLO11n",
+  "weights": "tools_yolo11n_v2.pt",
+  "imgsz": 320,
+  "confidence": 0.45,
+  "classes": [
+    "screwdriver",
+    "wrench",
+    "pliers",
+    "hammer"
+  ],
+  "training_epochs": 5,
+  "training_images": 4602,
+  "validation_images": 528,
+  "count_exact": 445,
+  "count_multi_exact": 57,
+  "count_multi_images": 81,
+  "limitations": "Public context crops only; new real phone photos not yet validated."
+}
