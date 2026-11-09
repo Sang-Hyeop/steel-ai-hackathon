@@ -9,10 +9,11 @@ _model=None
 _path=None
 ALIASES={
  'screwdriver':'드라이버','phillips screwdriver':'드라이버','flathead screwdriver':'드라이버',
- 'wrench':'렌치','spanner':'렌치','adjustable wrench':'렌치','combination wrench':'렌치',
+ 'wrench':'몽키 스패너','spanner':'몽키 스패너','adjustable wrench':'몽키 스패너','combination wrench':'몽키 스패너',
+ 'monkey wrench':'몽키 스패너','렌치':'몽키 스패너',
  'pliers':'펜치','plier':'펜치','combination pliers':'펜치','hammer':'망치',
  'claw hammer':'망치','ball-peen hammer':'망치',
- **{x:x for x in ['드라이버','렌치','펜치','망치']}}
+ **{x:x for x in ['드라이버','몽키 스패너','펜치','망치']}}
 
 def model_available():
  p=os.environ.get('STBM_MODEL_PATH','')
