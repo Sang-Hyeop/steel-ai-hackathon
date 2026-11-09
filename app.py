@@ -1,4 +1,4 @@
-import os, sqlite3, secrets, json, io
+import os, sqlite3, secrets, json, io, base64, binascii
 from urllib.parse import urlparse
 from pathlib import Path
 from functools import wraps
@@ -26,7 +26,7 @@ def create_app(database=None):
     app.config.update(SECRET_KEY=os.environ.get('STBM_SECRET_KEY') or secret_file.read_text(),
         DATABASE=str(database or folder / 'stbm.sqlite3'), SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=os.environ.get('STBM_HTTPS') == '1',
-        MAX_CONTENT_LENGTH=8 * 1024 * 1024)
+        MAX_CONTENT_LENGTH=10 * 1024 * 1024)
     @contextmanager
     def db():
         c = sqlite3.connect(app.config['DATABASE'], timeout=10)
@@ -256,6 +256,17 @@ def create_app(database=None):
         tmp = out.with_suffix('.tmp.jpg')
         image.save(tmp, format='JPEG', quality=85, optimize=True)
         tmp.replace(out)
+    def decode_event_photo(value):
+        if not isinstance(value,str) or not value.startswith('data:image/'):
+            raise ValueError('반납하려면 촬영 사진이 반드시 필요합니다.')
+        try:
+            header,encoded=value.split(',',1)
+            if ';base64' not in header: raise ValueError
+            raw=base64.b64decode(encoded,validate=True)
+        except (ValueError,binascii.Error):
+            raise ValueError('반납 사진 형식이 올바르지 않습니다. 다시 촬영하세요.')
+        if not raw: raise ValueError('반납하려면 촬영 사진이 반드시 필요합니다.')
+        return raw
         return out
     def can_view_event(row):
         return row and (session['role'] == 'admin' or row['user_id'] == session['uid'])
@@ -400,6 +411,8 @@ def create_app(database=None):
     @app.post('/api/reservations')
     @auth()
     def create_reservation():
+        if session['role']=='admin':
+            return jsonify(error='장기 대여 예약 신청은 작업자 계정만 가능합니다.'),403
         data=request.get_json() or {};mode=mode_of(data);token=data.get('token');items=data.get('items')
         if not isinstance(token,str) or not 16<=len(token)<=100: raise ValueError('처리 식별자가 필요합니다.')
         if not isinstance(items,dict) or not items or any(t not in TOOLS for t in items): raise ValueError('공구를 선택하세요.')
@@ -471,7 +484,9 @@ def create_app(database=None):
             rent_start,rent_due=start.isoformat(),due.isoformat()
             plant=parse_plant(data.get('plant'))
         issues={}
+        return_photo=None
         if kind=='return':
+            return_photo=decode_event_photo(data.get('photo_data'))
             raw_damage=data.get('damage') or {}
             raw_issues=data.get('issues') or {}
             if not isinstance(raw_damage,dict) or not isinstance(raw_issues,dict): raise ValueError('파손/수리 정보가 올바르지 않습니다.')
@@ -536,9 +551,10 @@ def create_app(database=None):
                 for row in c.execute("SELECT id,event_id FROM reservations WHERE user_id=? AND mode=? AND status='active'",(session['uid'],mode)):
                     if row['event_id'] and row['event_id'] not in open_ids:
                         c.execute("UPDATE reservations SET status='returned' WHERE id=?",(row['id'],))
+                store_event_photo(event_id,return_photo)
         return jsonify(ok=True,id=event_id,created=c_time,name=session['name'],kind=kind,items=items,
                        rent_start=rent_start,rent_due=rent_due,plant=plant,damage=damage,issues=issues,
-                       compare_event_id=compare_id,has_photo=False),201
+                       compare_event_id=compare_id,has_photo=kind=='return'),201
     @app.post('/api/events/<int:event_id>/photo')
     @auth()
     def upload_event_photo(event_id):
