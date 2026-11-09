@@ -1,0 +1,16 @@
+{
+  "model": "YOLO11n",
+  "weights": "tools_yolo11n_v4.pt",
+  "status": "final",
+  "imgsz": 640,
+  "confidence": 0.35,
+  "classes": [
+    "screwdriver",
+    "wrench",
+    "pliers",
+    "hammer"
+  ],
+  "source": "runs/yolo11n_scale_v4/weights/best.pt",
+  "val_count_exact_rate": 0.9066,
+  "limitations": "Diagnostic real photos still imperfect; confirm/edit before save."
+}

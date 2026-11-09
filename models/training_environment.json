@@ -1,0 +1,13 @@
+{
+  "ultralytics": "8.4.153",
+  "torch": "2.14.0",
+  "torchvision": "0.29.0",
+  "Pillow": "12.3.0",
+  "numpy": "2.4.6",
+  "device": "cpu",
+  "mps_available": false,
+  "baseline_epochs": 5,
+  "baseline_fraction": 0.25,
+  "imgsz": 320,
+  "seed": 42
+}

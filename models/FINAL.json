@@ -1,0 +1,23 @@
+{
+  "selected": "tools_yolo11n_v4.pt",
+  "imgsz": 640,
+  "confidence": 0.35,
+  "classes": [
+    "screwdriver",
+    "wrench",
+    "pliers",
+    "hammer"
+  ],
+  "applies_to": [
+    "SmartToolBox_실행.py",
+    "SmartToolBox_휴대폰_실행.py",
+    "/api/recognize",
+    "admin QR mobile flow"
+  ],
+  "rejected": {
+    "v5": "Synthetic scene fine-tune regressed on diagnostic real photos",
+    "v2": "Weaker than v4 on crops and real photos",
+    "v3": "Weaker than v4 on diagnostic photos"
+  },
+  "notes": "User must confirm/edit recognition before saving. Not automatic inventory confirmation."
+}

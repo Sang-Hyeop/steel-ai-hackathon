@@ -1,0 +1,26 @@
+.DS_Store
+__pycache__/
+.env
+.env.*
+!.env.example
+node_modules/
+.vscode/
+
+instance/
+.pytest_cache/
+.venv/
+
+# Local datasets (AI-Hub raw/processed are huge)
+data/
+
+# Local HTTPS tunnel binary
+tools/cloudflared
+
+# Training outputs
+runs/
+
+# Model weights: keep final app weights + docs only
+models/**
+!models/README.md
+!models/*.json
+!models/tools_yolo11n_v4.pt

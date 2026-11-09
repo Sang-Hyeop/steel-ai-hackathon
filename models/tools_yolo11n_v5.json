@@ -1,0 +1,9 @@
+{
+  "status": "not_promoted",
+  "reason": "User diagnostic photos regressed vs v4 (real_four_tools: 0 detections). Crop val count exact 77.6% vs v4 90.7%.",
+  "weights": "runs/yolo11n_scene_v5/weights/best.pt",
+  "candidate": "models/candidates/tools_yolo11n_v5.pt",
+  "imgsz": 640,
+  "epochs": 12,
+  "base": "tools_yolo11n_v4.pt"
+}
