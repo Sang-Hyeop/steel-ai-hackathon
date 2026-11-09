@@ -21,7 +21,7 @@ class AppTest(unittest.TestCase):
  def event(self,kind='borrow',items=None,token=None,**extra):
   body={'mode':'test','kind':kind,'items':items or {'드라이버':1},'token':token or str(uuid.uuid4()),**extra}
   if kind=='borrow':
-   body.setdefault('rent_start','2026-11-09');body.setdefault('rent_due','2026-11-16');body.setdefault('plant','제강')
+   body.setdefault('rent_start','2026-11-09');body.setdefault('rent_due','2026-11-16');body.setdefault('rent_due_hour',18);body.setdefault('plant','제강')
   else: body.setdefault('photo_data',self.photo_data())
   return body
 
@@ -103,8 +103,16 @@ class AppTest(unittest.TestCase):
   self.assertIn('냉연',st['plants'])
   self.assertTrue(any(h['plant']=='냉연' for h in st['plant_holders']))
   g=next(x for x in st['groups'] if x['id']==ok.json['id'])
-  self.assertEqual((g['rent_start'],g['rent_due'],g['plant']),('2026-11-10','2026-11-20','냉연'))
-  self.assertTrue(any(l['rent_due']=='2026-11-20' and l['name']=='김상협' for l in st['active_loans']))
+  self.assertEqual((g['rent_start'],g['rent_due'],g['rent_due_hour'],g['plant']),('2026-11-10','2026-11-20',18,'냉연'))
+  self.assertTrue(any(l['rent_due']=='2026-11-20' and l['rent_due_hour']==18 and l['name']=='김상협' for l in st['active_loans']))
+
+ def test_due_hour_validation_and_boundaries(self):
+  self.post(self.admin,'stock',self.stock(total=3))
+  for hour in (1,24):
+   result=self.post(self.worker,'events',self.event(items={'드라이버':1},rent_due_hour=hour))
+   self.assertEqual(result.status_code,201);self.assertEqual(result.json['rent_due_hour'],hour)
+  for hour in (0,25,'18'):
+   self.assertEqual(self.post(self.worker,'events',self.event(rent_due_hour=hour)).status_code,400)
 
  def test_damage_report_and_stock_removal(self):
   self.post(self.admin,'stock',self.stock(total=5))
@@ -148,7 +156,7 @@ class AppTest(unittest.TestCase):
   day=datetime.now(ZoneInfo('Asia/Seoul')).date()
   self.post(self.admin,'stock',self.stock(total=5))
   # reserve 2 drivers
-  r=self.post(self.worker,'reservations',{'mode':'test','items':{'드라이버':2},'rent_start':str(day),'rent_due':str(day+timedelta(days=3)),'plant':'열연','token':str(uuid.uuid4())})
+  r=self.post(self.worker,'reservations',{'mode':'test','items':{'드라이버':2},'rent_start':str(day),'rent_due':str(day+timedelta(days=3)),'rent_due_hour':18,'plant':'열연','token':str(uuid.uuid4())})
   self.assertEqual(r.status_code,201);self.assertEqual(r.json['status'],'pending');rid=r.json['id']
   self.assertEqual(self.post(self.worker,f'reservations/{rid}/approve',{}).status_code,403)
   st=self.admin.get('/api/state?mode=test').json

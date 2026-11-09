@@ -3,7 +3,7 @@ from urllib.parse import urlparse
 from pathlib import Path
 from functools import wraps
 from contextlib import contextmanager
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, time, timedelta
 from zoneinfo import ZoneInfo
 from flask import Flask, request, session, jsonify, render_template, redirect, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -87,6 +87,7 @@ def create_app(database=None):
         cols={r['name'] for r in c.execute('PRAGMA table_info(events)')}
         if 'rent_start' not in cols: c.execute('ALTER TABLE events ADD COLUMN rent_start TEXT')
         if 'rent_due' not in cols: c.execute('ALTER TABLE events ADD COLUMN rent_due TEXT')
+        if 'rent_due_hour' not in cols: c.execute('ALTER TABLE events ADD COLUMN rent_due_hour INTEGER NOT NULL DEFAULT 24')
         if 'reservation_id' not in cols: c.execute('ALTER TABLE events ADD COLUMN reservation_id INTEGER')
         c.executescript('''
         CREATE TABLE IF NOT EXISTS damage_reports(
@@ -112,6 +113,8 @@ def create_app(database=None):
             c.execute('ALTER TABLE events ADD COLUMN plant TEXT')
         if 'plant' not in {r['name'] for r in c.execute('PRAGMA table_info(reservations)')}:
             c.execute('ALTER TABLE reservations ADD COLUMN plant TEXT')
+        if 'rent_due_hour' not in {r['name'] for r in c.execute('PRAGMA table_info(reservations)')}:
+            c.execute('ALTER TABLE reservations ADD COLUMN rent_due_hour INTEGER NOT NULL DEFAULT 24')
     def now(): return datetime.now(ZoneInfo('Asia/Seoul')).isoformat(timespec='seconds')
     def today(): return datetime.now(ZoneInfo('Asia/Seoul')).date()
     def auth(admin=False):
@@ -136,6 +139,14 @@ def create_app(database=None):
         if not isinstance(value,str) or not value.strip(): raise ValueError(f'{label}을(를) 입력하세요.')
         try: return date.fromisoformat(value.strip()[:10])
         except ValueError: raise ValueError(f'{label}은(는) YYYY-MM-DD 형식이어야 합니다. 예: 2026-11-09')
+    def parse_due_hour(value):
+        if value is None: return 24
+        if type(value) is not int or not 1<=value<=24:
+            raise ValueError('반납 예정 시간은 01시부터 24시 사이로 선택하세요.')
+        return value
+    def deadline(day,hour):
+        if hour==24: return datetime.combine(day+timedelta(days=1),time.min,tzinfo=ZoneInfo('Asia/Seoul'))
+        return datetime.combine(day,time(hour),tzinfo=ZoneInfo('Asia/Seoul'))
     def validate_period(start,due):
         if due<start: raise ValueError('반납 예정일은 대여 시작일 이후여야 합니다.')
         if (due-start).days>365: raise ValueError('대여 기간은 최대 365일까지 설정할 수 있습니다.')
@@ -203,9 +214,9 @@ def create_app(database=None):
     def reservation_items(c,reservation_id):
         return {r['tool']:r['qty'] for r in c.execute('SELECT tool,qty FROM reservation_lines WHERE reservation_id=?',(reservation_id,))}
     def open_loans_for(c,mode,user_id):
-        """FIFO remaining qty per borrow event; overdue when today >= due + 1 day."""
+        """FIFO remaining qty per borrow event; overdue after the selected due hour."""
         borrows=c.execute(
-            "SELECT e.id,e.rent_start,e.rent_due,e.created,e.plant FROM events e "
+            "SELECT e.id,e.rent_start,e.rent_due,e.rent_due_hour,e.created,e.plant FROM events e "
             "WHERE e.mode=? AND e.user_id=? AND e.kind='borrow' ORDER BY e.id",(mode,user_id)).fetchall()
         remaining={}
         meta={}
@@ -222,21 +233,26 @@ def create_app(database=None):
                     have=remaining[eid].get(row['tool'],0)
                     if have<=0: continue
                     take=min(have,need);remaining[eid][row['tool']]=have-take;need-=take
-        day=today();loans=[]
+        current=datetime.now(ZoneInfo('Asia/Seoul'));loans=[]
         for eid,items in remaining.items():
             left={t:q for t,q in items.items() if q>0}
             if not left: continue
             b=meta[eid];due=date.fromisoformat(b['rent_due']) if b['rent_due'] else None
+            due_hour=b['rent_due_hour'] or 24
             start=b['rent_start'] or b['created'][:10]
-            overdue=bool(due and day>=due+timedelta(days=1))
-            loans.append(dict(id=eid,rent_start=start,rent_due=b['rent_due'],plant=b['plant'],items=left,
-                              overdue=overdue,days_overdue=(day-due).days if overdue else 0))
+            due_time=deadline(due,due_hour) if due else None
+            overdue=bool(due_time and current>due_time)
+            elapsed=current-due_time if overdue else None
+            days_overdue=max(1,elapsed.days+(1 if elapsed.seconds else 0)) if elapsed else 0
+            loans.append(dict(id=eid,rent_start=start,rent_due=b['rent_due'],rent_due_hour=due_hour,plant=b['plant'],items=left,
+                              overdue=overdue,days_overdue=days_overdue))
         return loans
     def serialize_reservation(c,row):
         items=[dict(r) for r in c.execute('SELECT tool,qty FROM reservation_lines WHERE reservation_id=?',(row['id'],))]
         user=c.execute('SELECT name FROM users WHERE id=?',(row['user_id'],)).fetchone()
-        due=date.fromisoformat(row['rent_due']);overdue_hold=today()>=due+timedelta(days=1) and row['status'] in ('pending','approved','active')
-        return dict(id=row['id'],name=user['name'],status=row['status'],rent_start=row['rent_start'],rent_due=row['rent_due'],plant=row['plant'],
+        due=date.fromisoformat(row['rent_due']);due_hour=row['rent_due_hour'] or 24
+        overdue_hold=datetime.now(ZoneInfo('Asia/Seoul'))>deadline(due,due_hour) and row['status'] in ('pending','approved','active')
+        return dict(id=row['id'],name=user['name'],status=row['status'],rent_start=row['rent_start'],rent_due=row['rent_due'],rent_due_hour=due_hour,plant=row['plant'],
                     created=row['created'],event_id=row['event_id'],items=items,overdue=overdue_hold and row['status']=='active')
     photo_root = Path(app.config['DATABASE']).resolve().parent / 'event_photos'
     photo_root.mkdir(parents=True, exist_ok=True)
@@ -354,7 +370,7 @@ def create_app(database=None):
                     for r in c.execute('SELECT tool,total,version FROM stock WHERE mode=? ORDER BY rowid',(mode,))]
             where='e.mode=?';args=[mode]
             if session['role']!='admin': where+=' AND e.user_id=?';args.append(session['uid'])
-            events=[dict(r) for r in c.execute('SELECT e.id,u.name,e.kind,e.created,e.rent_start,e.rent_due,e.plant,l.tool,l.qty FROM events e JOIN users u ON u.id=e.user_id JOIN lines l ON l.event_id=e.id WHERE '+where+' ORDER BY e.id DESC LIMIT 200',args)]
+            events=[dict(r) for r in c.execute('SELECT e.id,u.name,e.kind,e.created,e.rent_start,e.rent_due,e.rent_due_hour,e.plant,l.tool,l.qty FROM events e JOIN users u ON u.id=e.user_id JOIN lines l ON l.event_id=e.id WHERE '+where+' ORDER BY e.id DESC LIMIT 200',args)]
             holders=[];plant_holders=[];adjustments=[]
             if session['role']=='admin':
                 holders=[dict(r) for r in c.execute("SELECT u.name,l.tool,SUM(CASE WHEN e.kind='borrow' THEN l.qty ELSE -l.qty END) qty FROM events e JOIN lines l ON l.event_id=e.id JOIN users u ON u.id=e.user_id WHERE e.mode=? GROUP BY u.id,l.tool HAVING qty>0",(mode,))]
@@ -362,18 +378,18 @@ def create_app(database=None):
                 adjustments=[dict(r) for r in c.execute('SELECT a.id,u.name,a.tool,a.before_qty,a.after_qty,a.reason,a.created FROM adjustments a JOIN users u ON u.id=a.user_id WHERE a.mode=? ORDER BY a.id DESC LIMIT 50',(mode,))]
             return_count=c.execute("SELECT count(*) FROM events e WHERE "+where+" AND e.kind='return'",args).fetchone()[0]
             movement=[dict(r) for r in c.execute("SELECT l.tool,SUM(CASE WHEN e.kind='borrow' THEN l.qty ELSE 0 END) borrowed,SUM(CASE WHEN e.kind='return' THEN l.qty ELSE 0 END) returned FROM events e JOIN lines l ON l.event_id=e.id WHERE "+where+" GROUP BY l.tool",args)]
-            groups=[dict(r) for r in c.execute('SELECT e.id,u.name,e.kind,e.created,e.status,e.rent_start,e.rent_due,e.compare_event_id,e.plant FROM events e JOIN users u ON u.id=e.user_id WHERE '+where+' ORDER BY e.id DESC LIMIT 200',args)]
+            groups=[dict(r) for r in c.execute('SELECT e.id,u.name,e.kind,e.created,e.status,e.rent_start,e.rent_due,e.rent_due_hour,e.compare_event_id,e.plant FROM events e JOIN users u ON u.id=e.user_id WHERE '+where+' ORDER BY e.id DESC LIMIT 200',args)]
             for group in groups:
                 group['items']=[dict(r) for r in c.execute('SELECT tool,qty FROM lines WHERE event_id=?',(group['id'],))]
                 group['status']='완료' if group['status']=='completed' else group['status']
                 group['has_photo']=photo_file(group['id']).is_file()
                 cid=group.get('compare_event_id')
                 group['has_compare_photo']=bool(cid and photo_file(cid).is_file())
-                group['loan_rent_start']=group['loan_rent_due']=None
+                group['loan_rent_start']=group['loan_rent_due']=group['loan_rent_due_hour']=None
                 if group['kind']=='return' and cid:
-                    linked=c.execute('SELECT rent_start,rent_due FROM events WHERE id=?',(cid,)).fetchone()
+                    linked=c.execute('SELECT rent_start,rent_due,rent_due_hour FROM events WHERE id=?',(cid,)).fetchone()
                     if linked:
-                        group['loan_rent_start']=linked['rent_start'];group['loan_rent_due']=linked['rent_due']
+                        group['loan_rent_start']=linked['rent_start'];group['loan_rent_due']=linked['rent_due'];group['loan_rent_due_hour']=linked['rent_due_hour']
             users=[dict(r) for r in c.execute('SELECT id,name,role FROM users ORDER BY id')] if session['role']=='admin' else []
             if session['role']=='admin':
                 res_rows=c.execute('SELECT * FROM reservations WHERE mode=? ORDER BY id DESC LIMIT 100',(mode,)).fetchall()
@@ -403,7 +419,7 @@ def create_app(database=None):
             borrow_photos=[]
             for loan in loans:
                 if photo_file(loan['id']).is_file():
-                    borrow_photos.append(dict(id=loan['id'],rent_start=loan['rent_start'],rent_due=loan['rent_due'],items=loan['items'],overdue=loan['overdue'],plant=loan.get('plant')))
+                    borrow_photos.append(dict(id=loan['id'],rent_start=loan['rent_start'],rent_due=loan['rent_due'],rent_due_hour=loan['rent_due_hour'],items=loan['items'],overdue=loan['overdue'],plant=loan.get('plant')))
             report=weekly_report(c,mode) if session['role']=='admin' else None
         return jsonify(stock=stocks,events=events,holders=holders,plant_holders=plant_holders,adjustments=adjustments,return_count=return_count,
                        movement=movement,groups=groups,users=users,reservations=reservations,loans=loans,overdue=overdue,
@@ -418,13 +434,15 @@ def create_app(database=None):
         if not isinstance(items,dict) or not items or any(t not in TOOLS for t in items): raise ValueError('공구를 선택하세요.')
         items={t:integer(q,1) for t,q in items.items()}
         start=parse_day(data.get('rent_start'),'대여 시작일');due=parse_day(data.get('rent_due'),'반납 예정일');validate_period(start,due)
+        due_hour=parse_due_hour(data.get('rent_due_hour'))
         plant=parse_plant(data.get('plant'))
         with db() as c:
             c.execute('BEGIN IMMEDIATE')
             old=c.execute('SELECT * FROM reservations WHERE token=?',(token,)).fetchone()
             if old:
                 same=(old['user_id']==session['uid'] and old['mode']==mode and old['rent_start']==start.isoformat()
-                      and old['rent_due']==due.isoformat() and old['plant']==plant and reservation_items(c,old['id'])==items)
+                      and old['rent_due']==due.isoformat() and old['rent_due_hour']==due_hour
+                      and old['plant']==plant and reservation_items(c,old['id'])==items)
                 if not same: raise ValueError('이미 다른 처리에 사용된 식별자입니다.')
                 return jsonify(ok=True,id=old['id'],duplicate=True,status=old['status'],plant=old['plant']),200
             borrowed=balance(c,mode);reserved=reserved_balance(c,mode);damaged=damaged_pending(c,mode)
@@ -433,11 +451,11 @@ def create_app(database=None):
                 free=total-borrowed.get(tool,0)-reserved.get(tool,0)-damaged.get(tool,0)
                 if qty>free: raise ValueError(f'{tool}: 예약 가능 수량(대여중·예약·파손대기 제외)을 초과했습니다. 가능 {max(free,0)}개')
             cur=c.execute(
-                "INSERT INTO reservations(token,user_id,mode,status,rent_start,rent_due,created,plant) VALUES(?,?,?,?,?,?,?,?)",
-                (token,session['uid'],mode,'pending',start.isoformat(),due.isoformat(),now(),plant))
+                "INSERT INTO reservations(token,user_id,mode,status,rent_start,rent_due,rent_due_hour,created,plant) VALUES(?,?,?,?,?,?,?,?,?)",
+                (token,session['uid'],mode,'pending',start.isoformat(),due.isoformat(),due_hour,now(),plant))
             rid=cur.lastrowid
             for tool,qty in items.items(): c.execute('INSERT INTO reservation_lines VALUES(?,?,?)',(rid,tool,qty))
-        return jsonify(ok=True,id=rid,status='pending',rent_start=start.isoformat(),rent_due=due.isoformat(),plant=plant),201
+        return jsonify(ok=True,id=rid,status='pending',rent_start=start.isoformat(),rent_due=due.isoformat(),rent_due_hour=due_hour,plant=plant),201
     @app.post('/api/reservations/<int:rid>/<action>')
     @auth()
     def decide_reservation(rid,action):
@@ -475,6 +493,7 @@ def create_app(database=None):
         items={t:integer(q,1) for t,q in items.items()}
         reservation_id=data.get('reservation_id')
         rent_start=rent_due=None
+        rent_due_hour=24
         plant=None
         damage={}
         damage_note=''
@@ -482,6 +501,7 @@ def create_app(database=None):
             if reservation_id is not None and type(reservation_id) is not int: raise ValueError('예약 선택이 올바르지 않습니다.')
             start=parse_day(data.get('rent_start'),'대여 시작일');due=parse_day(data.get('rent_due'),'반납 예정일');validate_period(start,due)
             rent_start,rent_due=start.isoformat(),due.isoformat()
+            rent_due_hour=parse_due_hour(data.get('rent_due_hour'))
             plant=parse_plant(data.get('plant'))
         issues={}
         return_photo=None
@@ -504,14 +524,14 @@ def create_app(database=None):
             if not isinstance(note,str): raise ValueError('파손/수리 메모 형식이 올바르지 않습니다.')
             damage_note=note.strip()[:200]
             if damage and not damage_note: damage_note='반납 시 이상 신고'
-        payload=json.dumps([mode,kind,items,rent_start,rent_due,reservation_id,plant,damage,issues,damage_note],sort_keys=True)
+        payload=json.dumps([mode,kind,items,rent_start,rent_due,rent_due_hour if kind=='borrow' else None,reservation_id,plant,damage,issues,damage_note],sort_keys=True)
         with db() as c:
             c.execute('BEGIN IMMEDIATE')
             old=c.execute('SELECT * FROM events WHERE token=?',(token,)).fetchone()
             if old:
                 if old['user_id']!=session['uid'] or old['payload']!=payload: raise ValueError('이미 다른 처리에 사용된 식별자입니다.')
                 return jsonify(ok=True,id=old['id'],duplicate=True,created=old['created'],name=session['name'],kind=kind,items=items,
-                               rent_start=old['rent_start'],rent_due=old['rent_due'],plant=old['plant'],damage=damage,issues=issues,
+                               rent_start=old['rent_start'],rent_due=old['rent_due'],rent_due_hour=old['rent_due_hour'],plant=old['plant'],damage=damage,issues=issues,
                                compare_event_id=old['compare_event_id'],has_photo=photo_file(old['id']).is_file())
             borrowed=balance(c,mode);mine=balance(c,mode,session['uid']);reserved=reserved_balance(c,mode);damaged=damaged_pending(c,mode)
             linked=None;compare_id=None
@@ -520,7 +540,7 @@ def create_app(database=None):
                 if not linked or linked['user_id']!=session['uid'] or linked['mode']!=mode:
                     raise ValueError('연결할 예약을 찾을 수 없습니다.')
                 if linked['status']!='approved': raise ValueError('승인된 예약만 실제 대여로 전환할 수 있습니다.')
-                if linked['rent_start']!=rent_start or linked['rent_due']!=rent_due:
+                if linked['rent_start']!=rent_start or linked['rent_due']!=rent_due or linked['rent_due_hour']!=rent_due_hour:
                     raise ValueError('예약된 대여 기간과 입력한 기간이 다릅니다.')
                 if (linked['plant'] or '')!=plant: raise ValueError('예약된 사용 공정과 입력한 공정이 다릅니다.')
                 booked=reservation_items(c,reservation_id)
@@ -536,8 +556,8 @@ def create_app(database=None):
                 if kind=='return' and qty>mine.get(tool,0): raise ValueError(tool+': 본인의 대여 수량을 초과했습니다.')
             c_time=now()
             cur=c.execute(
-                'INSERT INTO events(token,user_id,mode,kind,created,payload,rent_start,rent_due,reservation_id,compare_event_id,plant) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-                (token,session['uid'],mode,kind,c_time,payload,rent_start,rent_due,reservation_id,compare_id,plant))
+                'INSERT INTO events(token,user_id,mode,kind,created,payload,rent_start,rent_due,rent_due_hour,reservation_id,compare_event_id,plant) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+                (token,session['uid'],mode,kind,c_time,payload,rent_start,rent_due,rent_due_hour,reservation_id,compare_id,plant))
             event_id=cur.lastrowid
             for tool,qty in items.items(): c.execute('INSERT INTO lines VALUES(?,?,?)',(event_id,tool,qty))
             if linked:
@@ -553,7 +573,7 @@ def create_app(database=None):
                         c.execute("UPDATE reservations SET status='returned' WHERE id=?",(row['id'],))
                 store_event_photo(event_id,return_photo)
         return jsonify(ok=True,id=event_id,created=c_time,name=session['name'],kind=kind,items=items,
-                       rent_start=rent_start,rent_due=rent_due,plant=plant,damage=damage,issues=issues,
+                       rent_start=rent_start,rent_due=rent_due,rent_due_hour=rent_due_hour if kind=='borrow' else None,plant=plant,damage=damage,issues=issues,
                        compare_event_id=compare_id,has_photo=kind=='return'),201
     @app.post('/api/events/<int:event_id>/photo')
     @auth()
