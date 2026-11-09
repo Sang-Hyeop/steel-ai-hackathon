@@ -290,7 +290,7 @@ def create_app(database=None):
     def qr():
         import qrcode
         import qrcode.image.svg
-        url=os.environ.get('STBM_PUBLIC_URL','http://127.0.0.1:8001/')
+        url=os.environ.get('STBM_PUBLIC_URL','https://sanghyeopkim.pythonanywhere.com/')
         if urlparse(url).scheme not in ['https','http'] or not urlparse(url).netloc:
             raise ValueError('STBM_PUBLIC_URL에 올바른 웹 주소를 설정하세요.')
         image=qrcode.make(url,image_factory=qrcode.image.svg.SvgPathImage)
@@ -306,7 +306,7 @@ def create_app(database=None):
             model=FINAL_MODEL_NAME if model_available() else None,
             imgsz=int(os.environ.get('STBM_MODEL_IMGSZ', FINAL_IMGSZ)),
             conf=float(os.environ.get('STBM_MODEL_CONF', FINAL_CONF)),
-            public_url=os.environ.get('STBM_PUBLIC_URL','http://127.0.0.1:8001/'),
+            public_url=os.environ.get('STBM_PUBLIC_URL','https://sanghyeopkim.pythonanywhere.com/'),
         )
     @app.post('/api/recognize')
     @auth()
@@ -358,6 +358,11 @@ def create_app(database=None):
                 group['has_photo']=photo_file(group['id']).is_file()
                 cid=group.get('compare_event_id')
                 group['has_compare_photo']=bool(cid and photo_file(cid).is_file())
+                group['loan_rent_start']=group['loan_rent_due']=None
+                if group['kind']=='return' and cid:
+                    linked=c.execute('SELECT rent_start,rent_due FROM events WHERE id=?',(cid,)).fetchone()
+                    if linked:
+                        group['loan_rent_start']=linked['rent_start'];group['loan_rent_due']=linked['rent_due']
             users=[dict(r) for r in c.execute('SELECT id,name,role FROM users ORDER BY id')] if session['role']=='admin' else []
             if session['role']=='admin':
                 res_rows=c.execute('SELECT * FROM reservations WHERE mode=? ORDER BY id DESC LIMIT 100',(mode,)).fetchall()
@@ -366,12 +371,15 @@ def create_app(database=None):
             reservations=[serialize_reservation(c,r) for r in res_rows]
             loans=open_loans_for(c,mode,session['uid'])
             overdue=[x for x in loans if x['overdue']]
+            active_loans=[]
             damages=[]
             if session['role']=='admin':
-                overdue=[]
+                overdue=[];active_loans=[]
                 for u in c.execute('SELECT id,name FROM users').fetchall():
                     for loan in open_loans_for(c,mode,u['id']):
-                        if loan['overdue']: overdue.append(dict(loan,name=u['name']))
+                        row=dict(loan,name=u['name'])
+                        active_loans.append(row)
+                        if loan['overdue']: overdue.append(row)
                 for d in c.execute(
                     "SELECT d.id,d.event_id,d.tool,d.qty,d.note,d.status,d.created,d.issue,u.name FROM damage_reports d "
                     "JOIN users u ON u.id=d.user_id WHERE d.mode=? ORDER BY CASE d.status WHEN 'pending' THEN 0 ELSE 1 END, d.id DESC LIMIT 100",(mode,)):
@@ -388,7 +396,7 @@ def create_app(database=None):
             report=weekly_report(c,mode) if session['role']=='admin' else None
         return jsonify(stock=stocks,events=events,holders=holders,plant_holders=plant_holders,adjustments=adjustments,return_count=return_count,
                        movement=movement,groups=groups,users=users,reservations=reservations,loans=loans,overdue=overdue,
-                       damages=damages,borrow_photos=borrow_photos,report=report,plants=PLANTS)
+                       active_loans=active_loans,damages=damages,borrow_photos=borrow_photos,report=report,plants=PLANTS)
     @app.post('/api/reservations')
     @auth()
     def create_reservation():

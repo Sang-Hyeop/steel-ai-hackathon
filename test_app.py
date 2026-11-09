@@ -78,11 +78,15 @@ class AppTest(unittest.TestCase):
   self.post(self.admin,'stock',self.stock(total=2))
   body=self.event();body.pop('plant')
   self.assertEqual(self.post(self.worker,'events',body).status_code,400)
-  ok=self.post(self.worker,'events',self.event(plant='냉연'))
+  ok=self.post(self.worker,'events',self.event(plant='냉연',rent_start='2026-11-10',rent_due='2026-11-20'))
   self.assertEqual(ok.status_code,201);self.assertEqual(ok.json['plant'],'냉연')
+  self.assertEqual(ok.json['rent_start'],'2026-11-10');self.assertEqual(ok.json['rent_due'],'2026-11-20')
   st=self.admin.get('/api/state?mode=test').json
   self.assertIn('냉연',st['plants'])
   self.assertTrue(any(h['plant']=='냉연' for h in st['plant_holders']))
+  g=next(x for x in st['groups'] if x['id']==ok.json['id'])
+  self.assertEqual((g['rent_start'],g['rent_due'],g['plant']),('2026-11-10','2026-11-20','냉연'))
+  self.assertTrue(any(l['rent_due']=='2026-11-20' and l['name']=='김상협' for l in st['active_loans']))
 
  def test_damage_report_and_stock_removal(self):
   self.post(self.admin,'stock',self.stock(total=5))

@@ -116,3 +116,10 @@ html[data-theme=dark] .loan-card.is-overdue{background:#450a0a}
  .report-kpis{grid-template-columns:1fr;padding:0 18px 8px}
  .report-tools{padding:8px 18px 18px}
 }
+
+.period-cell{display:grid;gap:2px;font-size:11px;line-height:1.35;white-space:normal;min-width:120px}
+.period-cell span{color:var(--muted)}
+.period-cell small{color:var(--muted);font-weight:500}
+.period-summary{margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--tint);color:var(--text);font-size:12px}
+.loan-subhead{margin:16px 0 8px;font-size:12px;font-weight:700;color:var(--muted)}
+.active-loans .holder-line small{display:inline-block;margin-top:2px}
