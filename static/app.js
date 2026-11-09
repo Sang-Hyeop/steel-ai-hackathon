@@ -80,7 +80,7 @@ window.addEventListener('beforeunload',stopCamera);
 
 function formatOverdueBanner(){
  const banner=$('.overdue-banner');if(!banner||!state)return;
- const message=banner.querySelector('p');if(message)message.textContent='반납 예정일이 지났습니다. 즉시 반납해 주세요.';
+ const message=banner.querySelector('p'),copy='반납 예정일이 지났습니다. 즉시 반납해 주세요.';if(message&&message.textContent!==copy)message.textContent=copy;
  const overdue=state.overdue||[];
  banner.querySelectorAll('.overdue-item').forEach((el,i)=>{
   if(el.dataset.formatted)return;
