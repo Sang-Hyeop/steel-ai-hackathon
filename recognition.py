@@ -1,4 +1,5 @@
 """Explicitly configured, local object detector. Never substitutes sample results."""
+import base64
 import os
 from pathlib import Path
 from threading import Lock
@@ -14,6 +15,12 @@ ALIASES={
  'pliers':'펜치','plier':'펜치','combination pliers':'펜치','hammer':'망치',
  'claw hammer':'망치','ball-peen hammer':'망치',
  **{x:x for x in ['드라이버','몽키 스패너','펜치','망치']}}
+COLORS={
+ '드라이버':(37,99,235),
+ '몽키 스패너':(220,38,38),
+ '펜치':(217,119,6),
+ '망치':(22,163,74),
+}
 
 def model_available():
  p=os.environ.get('STBM_MODEL_PATH','')
@@ -61,6 +68,44 @@ def filter_detections(detections,close_conf=0.25):
   if not replaced: kept.append(det)
  return kept
 
+def annotate_image(image,detections):
+ """Draw final (filtered) boxes so the review UI matches counted tools."""
+ from PIL import ImageDraw, ImageFont
+ annotated=image.copy()
+ draw=ImageDraw.Draw(annotated)
+ # Scale stroke with image size so phone photos stay readable.
+ stroke=max(2,min(annotated.width,annotated.height)//220)
+ size=max(14,stroke*7)
+ font=ImageFont.load_default();korean_font=False
+ for candidate in (
+  '/System/Library/Fonts/AppleSDGothicNeo.ttc',
+  '/Library/Fonts/AppleGothic.ttf',
+  '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
+  '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+  '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+  str(Path(__file__).resolve().parent/'static'/'fonts'/'NotoSansKR-Regular.otf'),
+  '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+ ):
+  try:
+   font=ImageFont.truetype(candidate,size)
+   korean_font='Gothic' in candidate or 'Nanum' in candidate or 'NotoSans' in candidate or 'CJK' in candidate
+   break
+  except OSError: continue
+ latin={'드라이버':'Driver','몽키 스패너':'Monkey','펜치':'Pliers','망치':'Hammer'}
+ for det in detections:
+  x1,y1,x2,y2=[int(round(v)) for v in det['box']]
+  color=COLORS.get(det['tool'],(37,99,235))
+  draw.rectangle((x1,y1,x2,y2),outline=color,width=stroke)
+  name=det['tool'] if korean_font else latin.get(det['tool'],det['tool'])
+  label=f"{name} {det['confidence']:.0%}"
+  try: tb=draw.textbbox((0,0),label,font=font);tw,th=tb[2]-tb[0],tb[3]-tb[1]
+  except Exception: tw,th=len(label)*8,14
+  ty=max(0,y1-th-stroke*2)
+  draw.rectangle((x1,ty,x1+tw+stroke*2,ty+th+stroke*2),fill=color)
+  draw.text((x1+stroke,ty+stroke),label,fill=(255,255,255),font=font)
+ buf=io.BytesIO();annotated.save(buf,format='JPEG',quality=85,optimize=True)
+ return 'data:image/jpeg;base64,'+base64.b64encode(buf.getvalue()).decode('ascii')
+
 def recognize_image(raw):
  global _model,_path
  if not model_available():
@@ -99,6 +144,6 @@ def recognize_image(raw):
   detections=filter_detections(detections)
   counts={}
   for det in detections: counts[det['tool']]=counts.get(det['tool'],0)+1
-  return dict(items=counts,detections=detections,source='model')
+  return dict(items=counts,detections=detections,annotated_image=annotate_image(image,detections),source='model')
  except RuntimeError: raise
  except Exception as e: raise RuntimeError('AI 인식에 실패했습니다. 재시도하거나 수동으로 입력하세요.') from e

@@ -44,3 +44,75 @@
 .site-context{display:flex;align-items:center;gap:28px;min-width:0}.site-location{display:flex;align-items:center;gap:10px}.site-location>svg{width:23px;height:23px;stroke:var(--primary);fill:none;stroke-width:1.7;flex-shrink:0}.site-location b{font-size:13px;white-space:nowrap}.site-location a{display:block;font-size:12px;color:var(--muted);line-height:1.6}.site-clock{display:flex;flex-direction:column;border-left:1px solid var(--border);padding-left:24px;white-space:nowrap}.site-clock span{font-size:11px;color:var(--muted)}.site-clock time{font-size:17px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:.6px}.theme-toggle{display:inline-flex;justify-content:center;align-items:center;width:42px;height:42px;padding:10px}.theme-toggle svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 @media(max-width:1200px){.topbar{height:auto;min-height:82px;flex-wrap:wrap;padding:16px 24px;gap:16px}.site-context{gap:18px}.site-clock{padding-left:18px}.top-actions{margin-left:auto}}
 @media(max-width:760px){.topbar{padding:14px 16px;gap:14px}.site-context{width:100%;justify-content:space-between;gap:8px}.site-location b{font-size:12px}.site-location a{font-size:11px}.site-clock{padding-left:12px;text-align:right}.site-clock span{font-size:10px}.site-clock time{font-size:16px}.top-actions{margin:0}}
+
+.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;padding:0 24px 24px}
+.photo-card{overflow:hidden;cursor:pointer;padding:0}
+.photo-card img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--bg)}
+.photo-meta{padding:14px 16px;display:grid;gap:4px;font-size:12px}
+.detail-photo{display:block;width:100%;max-height:320px;object-fit:contain;background:var(--bg);border:1px solid var(--border);border-radius:10px;margin-top:18px}
+@media(max-width:760px){.photo-grid{padding:0 18px 18px;grid-template-columns:1fr 1fr}.detail-photo{max-height:240px}}
+
+.overdue-banner{background:#FEF2F2;border:2px solid #DC2626;border-radius:14px;padding:22px 24px;margin-bottom:22px;color:#B91C1C;box-shadow:0 8px 24px #dc26261a}
+.overdue-kicker{font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px}
+.overdue-title{font-size:42px;line-height:1;font-weight:900;letter-spacing:-1px;color:#DC2626;margin:4px 0 12px}
+.overdue-banner p{margin:0 0 12px;font-size:15px;font-weight:700;color:#991B1B}
+.overdue-item{display:flex;flex-direction:column;gap:2px;padding:10px 0;border-top:1px solid #FECACA;font-size:13px;color:#7F1D1D}
+.overdue-example{background:var(--surface);border:1px dashed var(--border);border-radius:12px;padding:16px 18px;margin-bottom:22px;display:grid;gap:4px}
+.overdue-example b{font-size:13px}
+.overdue-example span{color:#DC2626;font-weight:800;font-size:15px}
+.overdue-example small{color:var(--muted);font-size:12px}
+.loan-list{display:grid;gap:12px;padding:0 24px 24px}
+.loan-card{padding:16px 18px;display:grid;gap:6px}
+.loan-card>div{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.loan-card.is-overdue{border-color:#DC2626;background:#FEF2F2}
+.badge.overdue-badge{background:#DC2626;color:#fff}
+.period-box{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:16px 0 8px}
+.period-box label{flex:1;min-width:140px}
+.period-box input{display:block;width:100%;margin-top:6px}
+.period-tilde{font-size:22px;font-weight:700;color:var(--muted);padding-bottom:10px}
+.period-example,.review-period{margin-bottom:12px}
+.reserve-form{padding:0 24px 24px}
+.reserve-tools{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:16px 0}
+.reserve-tool{display:grid;gap:6px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg)}
+.reserve-tool input{width:100%}
+.reserve-actions{display:flex;gap:6px;flex-wrap:wrap}
+.reserve-pick{display:block;margin:14px 0;font-size:13px}
+.reserve-pick select{display:block;width:100%;margin-top:6px}
+html[data-theme=dark] .overdue-banner{background:#450a0a;border-color:#F87171;color:#FECACA}
+html[data-theme=dark] .overdue-title{color:#F87171}
+html[data-theme=dark] .overdue-banner p,html[data-theme=dark] .overdue-item{color:#FECACA}
+html[data-theme=dark] .loan-card.is-overdue{background:#450a0a}
+@media(max-width:760px){
+ .overdue-title{font-size:34px}
+ .reserve-tools{grid-template-columns:1fr}
+ .loan-list{padding:0 18px 18px}
+ .reserve-form{padding:0 18px 18px}
+}
+
+.damage-check{display:flex;align-items:center;gap:6px;font-size:12px;color:#B91C1C;white-space:nowrap;margin:0}
+.damage-check input{width:18px;height:18px;min-height:0;accent-color:#DC2626}
+.result-row input[data-row-damage-qty]{width:58px;border-color:#FCA5A5}
+.damage-note{display:block;margin-top:14px;font-size:12px}
+.damage-note input{display:block;width:100%;margin-top:6px}
+.damage-text{color:#DC2626}
+
+.compare-box{margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+.compare-head{display:grid;gap:2px;margin-bottom:12px}
+.compare-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.compare-grid figure{margin:0;background:var(--bg);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.compare-grid img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#0f172a}
+.compare-grid figcaption{padding:8px 10px;font-size:11px;color:var(--muted);line-height:1.4}
+.detail-compare{grid-template-columns:1fr 1fr;margin-top:18px}
+.report-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:0 24px 8px}
+.report-kpi{padding:16px 18px}
+.report-kpi span{display:block;color:var(--muted);font-size:12px}
+.report-kpi strong{display:block;font-size:28px;margin:8px 0 4px;letter-spacing:-.5px}
+.report-kpi small{color:var(--muted);font-size:11px}
+.report-tools{padding:8px 24px 24px}
+.result-row select[data-row-condition]{min-width:96px;flex:0 0 auto;border-color:#FCA5A5;color:#B91C1C}
+@media(max-width:760px){
+ .compare-grid{grid-template-columns:1fr}
+ .detail-compare{grid-template-columns:1fr}
+ .report-kpis{grid-template-columns:1fr;padding:0 18px 8px}
+ .report-tools{padding:8px 18px 18px}
+}
